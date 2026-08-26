@@ -487,6 +487,11 @@ export interface ApiCourseCourse extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     description: Schema.Attribute.Text;
+    instructor: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::instructor.instructor'
+    >;
+    lessons: Schema.Attribute.Relation<'oneToMany', 'api::lesson.lesson'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -533,6 +538,66 @@ export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+  };
+}
+
+export interface ApiInstructorInstructor extends Struct.CollectionTypeSchema {
+  collectionName: 'instructors';
+  info: {
+    displayName: 'Instructor';
+    pluralName: 'instructors';
+    singularName: 'instructor';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    courses: Schema.Attribute.Relation<'oneToMany', 'api::course.course'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::instructor.instructor'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiLessonLesson extends Struct.CollectionTypeSchema {
+  collectionName: 'lessons';
+  info: {
+    displayName: 'Lesson';
+    pluralName: 'lessons';
+    singularName: 'lesson';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    content: Schema.Attribute.Text;
+    course: Schema.Attribute.Relation<'manyToOne', 'api::course.course'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lesson.lesson'
+    > &
+      Schema.Attribute.Private;
+    order: Schema.Attribute.Integer;
+    publishedAt: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    videoUrl: Schema.Attribute.String;
   };
 }
 
@@ -1050,6 +1115,8 @@ declare module '@strapi/strapi' {
       'api::about.about': ApiAboutAbout;
       'api::course.course': ApiCourseCourse;
       'api::global.global': ApiGlobalGlobal;
+      'api::instructor.instructor': ApiInstructorInstructor;
+      'api::lesson.lesson': ApiLessonLesson;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;
       'plugin::i18n.locale': PluginI18NLocale;

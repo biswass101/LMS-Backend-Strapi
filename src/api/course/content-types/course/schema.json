@@ -26,6 +26,18 @@
     "published": {
       "type": "boolean",
       "default": true
+    },
+    "instructor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::instructor.instructor",
+      "inversedBy": "courses"
+    },
+    "lessons": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lesson.lesson",
+      "mappedBy": "course"
     }
   }
 }
