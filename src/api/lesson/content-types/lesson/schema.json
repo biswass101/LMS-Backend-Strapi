@@ -12,16 +12,19 @@
   "pluginOptions": {},
   "attributes": {
     "title": {
-      "type": "string"
+      "type": "string",
+      "required": true
     },
     "content": {
-      "type": "text"
+      "type": "richtext"
     },
     "videoUrl": {
       "type": "string"
     },
     "order": {
-      "type": "integer"
+      "type": "integer",
+      "required": true,
+      "default": 1
     },
     "course": {
       "type": "relation",

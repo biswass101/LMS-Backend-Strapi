@@ -12,10 +12,12 @@
   "pluginOptions": {},
   "attributes": {
     "title": {
-      "type": "string"
+      "type": "string",
+      "required": true
     },
     "slug": {
-      "type": "uid"
+      "type": "uid",
+      "targetField": "title"
     },
     "description": {
       "type": "text"
@@ -23,20 +25,28 @@
     "thumbnail": {
       "type": "string"
     },
-    "published": {
-      "type": "boolean",
-      "default": true
-    },
     "instructor": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "api::instructor.instructor",
-      "inversedBy": "courses"
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "taught_courses"
     },
     "lessons": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::lesson.lesson",
+      "mappedBy": "course"
+    },
+    "enrollments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::enrollment.enrollment",
+      "mappedBy": "course"
+    },
+    "quizzes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quiz.quiz",
       "mappedBy": "course"
     }
   }
