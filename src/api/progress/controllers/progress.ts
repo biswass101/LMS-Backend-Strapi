@@ -72,6 +72,13 @@ export default factories.createCoreController('api::progress.progress', ({ strap
         completed: true,
         completedAt: new Date().toISOString(),
       },
+      populate: {
+        lesson: true,
+        course: true,
+        student: {
+          fields: ['id', 'username', 'email'],
+        },
+      },
     });
 
     return ctx.send({ data: newProgress });
@@ -90,27 +97,32 @@ export default factories.createCoreController('api::progress.progress', ({ strap
       userRole = fullUser?.role?.name || fullUser?.role?.type;
     }
 
+    const filters: any = {};
     if (userRole?.toLowerCase() === 'student') {
-      const progresses = await strapi.documents('api::progress.progress').findMany({
-        filters: {
-          student: { id: user.id },
-        },
-        populate: ['lesson', 'course', 'student'],
-      });
-
-      return ctx.send({
-        data: progresses,
-        meta: {
-          pagination: {
-            page: 1,
-            pageSize: progresses.length,
-            pageCount: 1,
-            total: progresses.length,
-          },
-        },
-      });
+      filters.student = { id: user.id };
     }
 
-    return await super.find(ctx);
+    const progresses = await strapi.documents('api::progress.progress').findMany({
+      filters,
+      populate: {
+        lesson: true,
+        course: true,
+        student: {
+          fields: ['id', 'username', 'email'],
+        },
+      },
+    });
+
+    return ctx.send({
+      data: progresses,
+      meta: {
+        pagination: {
+          page: 1,
+          pageSize: progresses.length,
+          pageCount: 1,
+          total: progresses.length,
+        },
+      },
+    });
   },
 }));

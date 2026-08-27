@@ -26,7 +26,16 @@ export default {
 
       for (const action of actions) {
         for (const role of roles) {
-          if (role.type === 'authenticated' || role.type === 'admin' || role.type === 'student' || role.name === 'Admin' || role.name === 'Authenticated' || role.name === 'Student') {
+          if (
+            role.type === 'authenticated' ||
+            role.type === 'admin' ||
+            role.type === 'student' ||
+            role.type === 'instructor' ||
+            role.name === 'Admin' ||
+            role.name === 'Authenticated' ||
+            role.name === 'Student' ||
+            role.name === 'Instructor'
+          ) {
             const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
               where: { action, role: role.id },
             });
