@@ -14,14 +14,15 @@ export default factories.createCoreController('api::course.course', ({ strapi })
             userRole = fullUser?.role?.name || fullUser?.role?.type;
         }
 
-        if (!userRole || userRole.toLowerCase() !== 'admin') {
+        const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
+
+        if (roleNormalized !== 'admin') {
             return ctx.forbidden('Only admins can view platform stats');
         }
 
         const courses = await strapi.documents('api::course.course').findMany({});
         const enrollments = await strapi.documents('api::enrollment.enrollment').findMany({});
 
-        // Get users by role
         const users = await strapi.db.query('plugin::users-permissions.user').findMany({
             populate: ['role'],
         });
@@ -39,28 +40,89 @@ export default factories.createCoreController('api::course.course', ({ strapi })
             usersByRole: roleCounts,
         });
     },
+
+    async find(ctx) {
+        const user = ctx.state.user;
+        if (!user) return await super.find(ctx);
+
+        let userRole = user.role?.name || user.role?.type;
+        if (!userRole) {
+            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+                where: { id: user.id },
+                populate: ['role'],
+            });
+            userRole = fullUser?.role?.name || fullUser?.role?.type;
+        }
+
+        const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
+
+        if (roleNormalized === 'instructor') {
+            const courses = await strapi.documents('api::course.course').findMany({
+                filters: {
+                    instructor: { id: user.id },
+                },
+                populate: {
+                    instructor: true,
+                    lessons: true,
+                },
+            });
+            return ctx.send({
+                data: courses,
+                meta: {
+                    pagination: {
+                        page: 1,
+                        pageSize: courses.length,
+                        pageCount: 1,
+                        total: courses.length,
+                    },
+                },
+            });
+        }
+
+        return await super.find(ctx);
+    },
+
     async create(ctx) {
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
 
-        // Automatically set the instructor to the logged-in user
-        ctx.request.body.data = {
-            ...ctx.request.body.data,
-            instructor: user.id,
-        };
+        let userDocId = user.documentId;
+        if (!userDocId) {
+            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+                where: { id: user.id },
+            });
+            userDocId = fullUser?.documentId || user.id;
+        }
 
-        const response = await super.create(ctx);
-        return response;
+        const data = ctx.request.body.data || {};
+        const course = await strapi.documents('api::course.course').create({
+            data: {
+                ...data,
+                instructor: userDocId,
+            },
+            populate: ['instructor', 'lessons'],
+        });
+
+        return ctx.send({ data: course });
     },
 
     async update(ctx) {
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
 
-        const userRole = user.role?.name || user.role?.type;
+        let userRole = user.role?.name || user.role?.type;
+        if (!userRole) {
+            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+                where: { id: user.id },
+                populate: ['role'],
+            });
+            userRole = fullUser?.role?.name || fullUser?.role?.type;
+        }
+
+        const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
 
         // Admin and Content Manager can update any course
-        if (userRole === 'Admin' || userRole === 'Content Manager') {
+        if (roleNormalized === 'admin' || roleNormalized === 'contentmanager') {
             return await super.update(ctx);
         }
 
@@ -82,9 +144,18 @@ export default factories.createCoreController('api::course.course', ({ strapi })
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
 
-        const userRole = user.role?.name || user.role?.type;
+        let userRole = user.role?.name || user.role?.type;
+        if (!userRole) {
+            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+                where: { id: user.id },
+                populate: ['role'],
+            });
+            userRole = fullUser?.role?.name || fullUser?.role?.type;
+        }
 
-        if (userRole === 'Admin' || userRole === 'Content Manager') {
+        const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
+
+        if (roleNormalized === 'admin' || roleNormalized === 'contentmanager') {
             return await super.delete(ctx);
         }
 

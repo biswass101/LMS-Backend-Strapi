@@ -46,7 +46,9 @@ export default factories.createCoreController('api::progress.progress', ({ strap
       userRole = fullUser?.role?.name || fullUser?.role?.type;
     }
 
-    if (userRole?.toLowerCase() !== 'student') {
+    const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
+
+    if (roleNormalized !== 'student') {
       return ctx.forbidden('Only students can track progress');
     }
 
@@ -97,9 +99,14 @@ export default factories.createCoreController('api::progress.progress', ({ strap
       userRole = fullUser?.role?.name || fullUser?.role?.type;
     }
 
+    const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
     const filters: any = {};
-    if (userRole?.toLowerCase() === 'student') {
+
+    if (roleNormalized === 'student') {
       filters.student = { id: user.id };
+    } else if (roleNormalized === 'instructor') {
+      // Instructors can see the progress of students enrolled in their own courses
+      filters.course = { instructor: { id: user.id } };
     }
 
     const progresses = await strapi.documents('api::progress.progress').findMany({

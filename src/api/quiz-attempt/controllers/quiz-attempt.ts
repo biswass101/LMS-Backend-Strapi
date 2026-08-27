@@ -14,7 +14,9 @@ export default factories.createCoreController('api::quiz-attempt.quiz-attempt', 
       userRole = fullUser?.role?.name || fullUser?.role?.type;
     }
 
-    if (userRole?.toLowerCase() !== 'student') {
+    const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
+
+    if (roleNormalized !== 'student') {
       return ctx.forbidden('Only students can take quizzes');
     }
 
@@ -83,16 +85,23 @@ export default factories.createCoreController('api::quiz-attempt.quiz-attempt', 
       userRole = fullUser?.role?.name || fullUser?.role?.type;
     }
 
+    const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
     const queryFilters = (ctx.query.filters as any) || {};
     const quizDocumentId = queryFilters.quiz?.documentId?.$eq || queryFilters.quiz?.documentId || (typeof queryFilters.quiz === 'string' ? queryFilters.quiz : undefined);
 
     const filters: any = {};
-    if (userRole?.toLowerCase() === 'student') {
+    if (roleNormalized === 'student') {
       filters.student = { id: user.id };
+    } else if (roleNormalized === 'instructor') {
+      // Instructors can see quiz attempts for their own courses
+      filters.quiz = { course: { instructor: { id: user.id } } };
     }
 
     if (quizDocumentId) {
-      filters.quiz = { documentId: quizDocumentId };
+      filters.quiz = {
+        ...(filters.quiz || {}),
+        documentId: quizDocumentId,
+      };
     }
 
     const attempts = await strapi.documents('api::quiz-attempt.quiz-attempt').findMany({
