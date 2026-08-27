@@ -5,8 +5,16 @@ export default factories.createCoreController('api::quiz-attempt.quiz-attempt', 
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized('You must be logged in');
 
-    const userRole = user.role?.name || user.role?.type;
-    if (userRole !== 'Student') {
+    let userRole = user.role?.name || user.role?.type;
+    if (!userRole) {
+      const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+        where: { id: user.id },
+        populate: ['role'],
+      });
+      userRole = fullUser?.role?.name || fullUser?.role?.type;
+    }
+
+    if (userRole?.toLowerCase() !== 'student') {
       return ctx.forbidden('Only students can take quizzes');
     }
 
@@ -27,7 +35,6 @@ export default factories.createCoreController('api::quiz-attempt.quiz-attempt', 
     }
 
     // Auto-grade: compare student answers with correct answers
-    // answers format: [{ questionId: "abc123", selected: "A" }, ...]
     let score = 0;
     const totalQuestions = quiz.questions?.length || 0;
 
@@ -40,18 +47,25 @@ export default factories.createCoreController('api::quiz-attempt.quiz-attempt', 
       }
     }
 
-    // Save the attempt
-    ctx.request.body.data = {
-      student: user.id,
-      quiz: quizId,
-      score,
-      totalQuestions,
-      answers,
-      submittedAt: new Date().toISOString(),
-    };
+    // Save the attempt using Document Service API
+    const attempt = await strapi.documents('api::quiz-attempt.quiz-attempt').create({
+      data: {
+        student: user.id,
+        quiz: quizId,
+        score,
+        totalQuestions,
+        answers,
+        submittedAt: new Date().toISOString(),
+      },
+      populate: {
+        quiz: {
+          populate: ['course'],
+        },
+        student: true,
+      },
+    });
 
-    const response = await super.create(ctx);
-    return response;
+    return ctx.send({ data: attempt });
   },
 
   // Students see only their own attempts
@@ -59,16 +73,48 @@ export default factories.createCoreController('api::quiz-attempt.quiz-attempt', 
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized('You must be logged in');
 
-    const userRole = user.role?.name || user.role?.type;
+    let userRole = user.role?.name || user.role?.type;
+    if (!userRole) {
+      const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+        where: { id: user.id },
+        populate: ['role'],
+      });
+      userRole = fullUser?.role?.name || fullUser?.role?.type;
+    }
 
-    if (userRole === 'Student') {
-      ctx.query = {
-        ...ctx.query,
-        filters: {
-          ...((ctx.query.filters as object) || {}),
-          student: { id: user.id },
-        },
+    if (userRole?.toLowerCase() === 'student') {
+      const queryFilters = (ctx.query.filters as any) || {};
+      const quizDocumentId = queryFilters.quiz?.documentId?.$eq || queryFilters.quiz?.documentId || (typeof queryFilters.quiz === 'string' ? queryFilters.quiz : undefined);
+
+      const filters: any = {
+        student: { id: user.id },
       };
+
+      if (quizDocumentId) {
+        filters.quiz = { documentId: quizDocumentId };
+      }
+
+      const attempts = await strapi.documents('api::quiz-attempt.quiz-attempt').findMany({
+        filters,
+        populate: {
+          quiz: {
+            populate: ['course'],
+          },
+          student: true,
+        },
+      });
+
+      return ctx.send({
+        data: attempts,
+        meta: {
+          pagination: {
+            page: 1,
+            pageSize: attempts.length,
+            pageCount: 1,
+            total: attempts.length,
+          },
+        },
+      });
     }
 
     return await super.find(ctx);
