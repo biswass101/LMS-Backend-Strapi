@@ -37,12 +37,21 @@ export default factories.createCoreController('api::progress.progress', ({ strap
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized('You must be logged in');
 
-    const userRole = user.role?.name || user.role?.type;
-    if (userRole !== 'Student') {
+    let userRole = user.role?.name || user.role?.type;
+    if (!userRole) {
+      const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+        where: { id: user.id },
+        populate: ['role'],
+      });
+      userRole = fullUser?.role?.name || fullUser?.role?.type;
+    }
+
+    if (userRole?.toLowerCase() !== 'student') {
       return ctx.forbidden('Only students can track progress');
     }
 
     const lessonId = ctx.request.body.data?.lesson;
+    const courseId = ctx.request.body.data?.course;
 
     const existing = await strapi.documents('api::progress.progress').findMany({
       filters: {
@@ -55,33 +64,53 @@ export default factories.createCoreController('api::progress.progress', ({ strap
       return ctx.badRequest('You have already marked this lesson');
     }
 
-    ctx.request.body.data = {
-      ...ctx.request.body.data,
-      student: user.id,
-      completed: true,
-      completedAt: new Date().toISOString(),
-    };
+    const newProgress = await strapi.documents('api::progress.progress').create({
+      data: {
+        student: user.id,
+        lesson: lessonId,
+        course: courseId,
+        completed: true,
+        completedAt: new Date().toISOString(),
+      },
+    });
 
-    return await super.create(ctx);
+    return ctx.send({ data: newProgress });
   },
 
   async find(ctx) {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized('You must be logged in');
 
-    const userRole = user.role?.name || user.role?.type;
+    let userRole = user.role?.name || user.role?.type;
+    if (!userRole) {
+      const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+        where: { id: user.id },
+        populate: ['role'],
+      });
+      userRole = fullUser?.role?.name || fullUser?.role?.type;
+    }
 
-    if (userRole === 'Student') {
-      ctx.query = {
-        ...ctx.query,
+    if (userRole?.toLowerCase() === 'student') {
+      const progresses = await strapi.documents('api::progress.progress').findMany({
         filters: {
-          ...((ctx.query.filters as object) || {}),
           student: { id: user.id },
         },
-      };
+        populate: ['lesson', 'course', 'student'],
+      });
+
+      return ctx.send({
+        data: progresses,
+        meta: {
+          pagination: {
+            page: 1,
+            pageSize: progresses.length,
+            pageCount: 1,
+            total: progresses.length,
+          },
+        },
+      });
     }
 
     return await super.find(ctx);
   },
-  
 }));

@@ -19,23 +19,27 @@ export default {
   async bootstrap({ strapi }: { strapi: any }) {
     try {
       const roles = await strapi.db.query('plugin::users-permissions.role').findMany();
-      const action = 'api::course.course.getAdminStats';
+      const actions = [
+        'api::course.course.getAdminStats',
+        'api::progress.progress.getCourseProgress',
+      ];
 
-      for (const role of roles) {
-        // Grant getAdminStats action to Authenticated and Admin roles
-        if (role.type === 'authenticated' || role.type === 'admin' || role.name === 'Admin' || role.name === 'Authenticated') {
-          const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
-            where: { action, role: role.id },
-          });
-
-          if (!existing) {
-            await strapi.db.query('plugin::users-permissions.permission').create({
-              data: {
-                action,
-                role: role.id,
-              },
+      for (const action of actions) {
+        for (const role of roles) {
+          if (role.type === 'authenticated' || role.type === 'admin' || role.type === 'student' || role.name === 'Admin' || role.name === 'Authenticated' || role.name === 'Student') {
+            const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
+              where: { action, role: role.id },
             });
-            strapi.log.info(`Granted ${action} permission to role: ${role.name}`);
+
+            if (!existing) {
+              await strapi.db.query('plugin::users-permissions.permission').create({
+                data: {
+                  action,
+                  role: role.id,
+                },
+              });
+              strapi.log.info(`Granted ${action} permission to role: ${role.name}`);
+            }
           }
         }
       }

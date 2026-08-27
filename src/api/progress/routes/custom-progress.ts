@@ -6,7 +6,7 @@ export default {
       handler: 'progress.getCourseProgress',
       config: {
         policies: [],
-        middlewares: [],
+        middlewares: ['global::populate-user-role'],
       },
     },
   ],
