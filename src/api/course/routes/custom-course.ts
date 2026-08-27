@@ -6,7 +6,7 @@ export default {
       handler: 'course.getAdminStats',
       config: {
         policies: [],
-        middlewares: [],
+        middlewares: ['global::populate-user-role'],
       },
     },
   ],

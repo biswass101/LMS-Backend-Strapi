@@ -5,8 +5,16 @@ export default factories.createCoreController('api::course.course', ({ strapi })
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
 
-        const userRole = user.role?.name || user.role?.type;
-        if (userRole !== 'Admin') {
+        let userRole = user.role?.name || user.role?.type;
+        if (!userRole) {
+            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+                where: { id: user.id },
+                populate: ['role'],
+            });
+            userRole = fullUser?.role?.name || fullUser?.role?.type;
+        }
+
+        if (!userRole || userRole.toLowerCase() !== 'admin') {
             return ctx.forbidden('Only admins can view platform stats');
         }
 
