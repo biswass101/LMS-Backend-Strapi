@@ -2,8 +2,8 @@
 
 Strapi v5 backend / CMS for the LearnHub Learning Management System. Built for the Junior Software Engineer project round.
 
-**Live URL:** _[add Railway URL here]_  
-**Frontend URL:** _[add Vercel URL here]_
+**Live URL:** https://lms-backend-strapi-production.up.railway.app  
+**Frontend URL:** https://lms-frontend-theta-blond.vercel.app
 
 ---
 
@@ -76,6 +76,7 @@ API at `http://localhost:1337/api`.
 | `DATABASE_USERNAME` | DB user |
 | `DATABASE_PASSWORD` | DB password |
 | `DATABASE_SSL` | `false` for local, `true` for Neon/production |
+| `FRONTEND_URL` | (Optional) Extra CORS origin — set to your Vercel URL if using a custom domain |
 
 ---
 
