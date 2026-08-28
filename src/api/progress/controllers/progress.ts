@@ -7,9 +7,10 @@ export default factories.createCoreController('api::progress.progress', ({ strap
 
     const { courseId } = ctx.params;
 
-    // Get total lessons in this course
+    // Get total published lessons in this course
     const lessons = await strapi.documents('api::lesson.lesson').findMany({
       filters: { course: { documentId: courseId } },
+      status: 'published',
     });
 
     const totalLessons = lessons.length;
@@ -18,17 +19,29 @@ export default factories.createCoreController('api::progress.progress', ({ strap
       return ctx.send({ progress: 0, completedLessons: 0, totalLessons: 0 });
     }
 
-    // Get completed lessons for this student in this course
+    // Get completed progress entries for this student in this course
     const completedProgress = await strapi.documents('api::progress.progress').findMany({
       filters: {
         student: { id: user.id },
         course: { documentId: courseId },
         completed: true,
       },
+      populate: ['lesson'],
     });
 
-    const completedLessons = completedProgress.length;
-    const progress = Math.round((completedLessons / totalLessons) * 100);
+    // Count UNIQUE completed lessons that actually belong to this course's published lessons
+    const validLessonIds = new Set(lessons.map((l) => l.documentId));
+    const completedUniqueLessonIds = new Set<string>();
+
+    completedProgress.forEach((p: any) => {
+      const lessonDocId = p.lesson?.documentId || (typeof p.lesson === 'string' ? p.lesson : null);
+      if (lessonDocId && validLessonIds.has(lessonDocId)) {
+        completedUniqueLessonIds.add(lessonDocId);
+      }
+    });
+
+    const completedLessons = Math.min(completedUniqueLessonIds.size, totalLessons);
+    const progress = Math.min(100, Math.round((completedLessons / totalLessons) * 100));
 
     return ctx.send({ progress, completedLessons, totalLessons });
   },
@@ -55,15 +68,19 @@ export default factories.createCoreController('api::progress.progress', ({ strap
     const lessonId = ctx.request.body.data?.lesson;
     const courseId = ctx.request.body.data?.course;
 
+    if (!lessonId || !courseId) {
+      return ctx.badRequest('Lesson and Course documentId are required');
+    }
+
     const existing = await strapi.documents('api::progress.progress').findMany({
       filters: {
         student: { id: user.id },
-        lesson: { documentId: lessonId },
+        lesson: { documentId: { $eq: lessonId } },
       },
     });
 
     if (existing && existing.length > 0) {
-      return ctx.badRequest('You have already marked this lesson');
+      return ctx.badRequest('You have already marked this lesson as complete');
     }
 
     const newProgress = await strapi.documents('api::progress.progress').create({
@@ -107,6 +124,13 @@ export default factories.createCoreController('api::progress.progress', ({ strap
     } else if (roleNormalized === 'instructor') {
       // Instructors can see the progress of students enrolled in their own courses
       filters.course = { instructor: { id: user.id } };
+    }
+
+    // Support course documentId filter if provided in query params
+    const queryCourseFilter = (ctx.query as any)?.filters?.course?.documentId;
+    if (queryCourseFilter) {
+      const courseDocId = typeof queryCourseFilter === 'object' && queryCourseFilter.$eq ? queryCourseFilter.$eq : queryCourseFilter;
+      filters.course = { documentId: courseDocId };
     }
 
     const progresses = await strapi.documents('api::progress.progress').findMany({
