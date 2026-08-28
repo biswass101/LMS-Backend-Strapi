@@ -58,6 +58,7 @@ export default factories.createCoreController('api::course.course', ({ strapi })
 
         if (roleNormalized === 'instructor') {
             const courses = await strapi.documents('api::course.course').findMany({
+                status: 'draft',
                 filters: {
                     instructor: { id: user.id },
                 },
@@ -82,6 +83,28 @@ export default factories.createCoreController('api::course.course', ({ strapi })
         return await super.find(ctx);
     },
 
+    async findOne(ctx) {
+        const user = ctx.state.user;
+        const courseId = ctx.params.id;
+
+        // For authenticated users (instructors/admins managing courses),
+        // look up the course directly via document service to include drafts
+        if (user) {
+            const course = await strapi.documents('api::course.course').findOne({
+                documentId: courseId,
+                populate: ['instructor', 'lessons', 'enrollments', 'quizzes'],
+            });
+
+            if (!course) {
+                return ctx.notFound('Course not found');
+            }
+
+            return ctx.send({ data: course });
+        }
+
+        return await super.findOne(ctx);
+    },
+
     async create(ctx) {
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
@@ -95,11 +118,19 @@ export default factories.createCoreController('api::course.course', ({ strapi })
         }
 
         const data = ctx.request.body.data || {};
-        const course = await strapi.documents('api::course.course').create({
+        const draft = await strapi.documents('api::course.course').create({
             data: {
                 ...data,
                 instructor: userDocId,
             },
+        });
+
+        await strapi.documents('api::course.course').publish({
+            documentId: draft.documentId,
+        });
+
+        const course = await strapi.documents('api::course.course').findOne({
+            documentId: draft.documentId,
             populate: ['instructor', 'lessons'],
         });
 

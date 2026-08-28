@@ -32,6 +32,7 @@ export default factories.createCoreController('api::lesson.lesson', ({ strapi })
       }
 
       const lessons = await strapi.documents('api::lesson.lesson').findMany({
+        status: 'draft',
         filters,
         populate: { course: true },
       });
@@ -67,25 +68,27 @@ export default factories.createCoreController('api::lesson.lesson', ({ strapi })
 
     const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
 
-    // Admin and Content Manager can create lessons for any course
-    if (roleNormalized === 'admin' || roleNormalized === 'contentmanager') {
-      return await super.create(ctx);
-    }
-
     // Instructor: verify they own the course
-    const courseId = ctx.request.body.data?.course;
-    if (courseId) {
-      const course = await strapi.documents('api::course.course').findOne({
-        documentId: courseId,
-        populate: ['instructor'],
-      });
+    if (roleNormalized !== 'admin' && roleNormalized !== 'contentmanager') {
+      const courseId = ctx.request.body.data?.course;
+      if (courseId) {
+        const course = await strapi.documents('api::course.course').findOne({
+          documentId: courseId,
+          populate: ['instructor'],
+        });
 
-      if (!course || course.instructor?.id !== user.id) {
-        return ctx.forbidden('You can only add lessons to your own courses');
+        if (!course || course.instructor?.id !== user.id) {
+          return ctx.forbidden('You can only add lessons to your own courses');
+        }
       }
     }
 
-    return await super.create(ctx);
+    const result = await super.create(ctx);
+    const documentId = result?.data?.documentId;
+    if (documentId) {
+      await strapi.documents('api::lesson.lesson').publish({ documentId });
+    }
+    return result;
   },
 
   async update(ctx) {
