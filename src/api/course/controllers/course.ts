@@ -1,6 +1,37 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::course.course', ({ strapi }) => ({
+    async getInstructors(ctx) {
+        const user = ctx.state.user;
+        if (!user) return ctx.unauthorized('You must be logged in');
+
+        let userRole = user.role?.name || user.role?.type;
+        if (!userRole) {
+            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+                where: { id: user.id },
+                populate: ['role'],
+            });
+            userRole = fullUser?.role?.name || fullUser?.role?.type;
+        }
+
+        const roleNormalized = (userRole || '').toLowerCase().replace(/[\s_-]/g, '');
+
+        if (roleNormalized !== 'admin' && roleNormalized !== 'contentmanager') {
+            return ctx.forbidden('Only admins and content managers can view instructors');
+        }
+
+        const allRoles = await strapi.db.query('plugin::users-permissions.role').findMany({});
+        const instructorRole = allRoles.find((r: any) => r.name === 'Instructor');
+        if (!instructorRole) return ctx.send([]);
+
+        const instructors = await strapi.db.query('plugin::users-permissions.user').findMany({
+            where: { role: instructorRole.id },
+            select: ['id', 'documentId', 'username', 'email'],
+        });
+
+        return ctx.send(instructors);
+    },
+
     async getAdminStats(ctx) {
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
@@ -109,19 +140,26 @@ export default factories.createCoreController('api::course.course', ({ strapi })
         const user = ctx.state.user;
         if (!user) return ctx.unauthorized('You must be logged in');
 
-        let userDocId = user.documentId;
-        if (!userDocId) {
-            const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
-                where: { id: user.id },
-            });
-            userDocId = fullUser?.documentId || user.id;
-        }
+        const fullUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+            where: { id: user.id },
+            populate: ['role'],
+        });
+        const userDocId = user.documentId || fullUser?.documentId || user.id;
+        const userRole = user.role?.name || user.role?.type || fullUser?.role?.name || fullUser?.role?.type || '';
+        const roleNormalized = userRole.toLowerCase().replace(/[\s_-]/g, '');
 
         const data = ctx.request.body.data || {};
+
+        // Admin/Content Manager can assign a specific instructor; others are always assigned as self
+        let instructorDocId = userDocId;
+        if ((roleNormalized === 'admin' || roleNormalized === 'contentmanager') && data.instructor) {
+            instructorDocId = data.instructor;
+        }
+
         const draft = await strapi.documents('api::course.course').create({
             data: {
                 ...data,
-                instructor: userDocId,
+                instructor: instructorDocId,
             },
         });
 

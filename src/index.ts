@@ -1,54 +1,51 @@
 // import type { Core } from '@strapi/strapi';
 
 export default {
-  /**
-   * An asynchronous register function that runs before
-   * your application is initialized.
-   *
-   * This gives you an opportunity to extend code.
-   */
   register(/* { strapi }: { strapi: Core.Strapi } */) {},
 
-  /**
-   * An asynchronous bootstrap function that runs before
-   * your application gets started.
-   *
-   * This gives you an opportunity to set up your data model,
-   * run jobs, or perform some special logic.
-   */
   async bootstrap({ strapi }: { strapi: any }) {
     try {
       const roles = await strapi.db.query('plugin::users-permissions.role').findMany();
-      const actions = [
-        'api::course.course.getAdminStats',
-        'api::progress.progress.getCourseProgress',
+
+      const normalizeRole = (role: any) =>
+        (role.type || '').toLowerCase().replace(/[\s_-]/g, '');
+
+      const isAdmin = (role: any) =>
+        role.name === 'Admin' || normalizeRole(role) === 'admin';
+
+      const isContentManager = (role: any) =>
+        role.name === 'Content Manager' || normalizeRole(role) === 'contentmanager';
+
+      const isInstructor = (role: any) =>
+        role.name === 'Instructor' || normalizeRole(role) === 'instructor';
+
+      const isStudent = (role: any) =>
+        role.name === 'Student' ||
+        normalizeRole(role) === 'student' ||
+        normalizeRole(role) === 'authenticated';
+
+      const permissionMap: { action: string; check: (role: any) => boolean }[] = [
+        // Admin only
+        { action: 'api::course.course.getAdminStats', check: isAdmin },
+
+        // Admin + Content Manager
+        { action: 'api::course.course.getInstructors', check: (r) => isAdmin(r) || isContentManager(r) },
+
+        // All authenticated roles
+        { action: 'api::progress.progress.getCourseProgress', check: (r) => isAdmin(r) || isContentManager(r) || isInstructor(r) || isStudent(r) },
       ];
 
-      for (const action of actions) {
+      for (const { action, check } of permissionMap) {
         for (const role of roles) {
-          if (
-            role.type === 'authenticated' ||
-            role.type === 'admin' ||
-            role.type === 'student' ||
-            role.type === 'instructor' ||
-            role.name === 'Admin' ||
-            role.name === 'Authenticated' ||
-            role.name === 'Student' ||
-            role.name === 'Instructor'
-          ) {
-            const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
-              where: { action, role: role.id },
+          if (!check(role)) continue;
+          const existing = await strapi.db.query('plugin::users-permissions.permission').findOne({
+            where: { action, role: role.id },
+          });
+          if (!existing) {
+            await strapi.db.query('plugin::users-permissions.permission').create({
+              data: { action, role: role.id },
             });
-
-            if (!existing) {
-              await strapi.db.query('plugin::users-permissions.permission').create({
-                data: {
-                  action,
-                  role: role.id,
-                },
-              });
-              strapi.log.info(`Granted ${action} permission to role: ${role.name}`);
-            }
+            strapi.log.info(`Granted ${action} to role: ${role.name}`);
           }
         }
       }
